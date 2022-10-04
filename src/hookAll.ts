@@ -10,19 +10,20 @@ export interface Filters {
 let filters: Filters = { classFilters: ["AjcClosure"], methodFilters: ["_aroundBody"] }
 
 function hookAll(class_name: String, options: any){
-  let default_filters = { 
-    classFilters: ["AjcClosure"],
-    methodFilters: ["_aroundBody"] 
-  }
-
   let filters = options["filters"]
-  ? {
-      classFilters: [...default_filters.classFilters, ...options["filters"].classFilters],
-      methodFilters: [...default_filters.methodFilters, ...options["filters"].methodFilters]
-    } 
-  : default_filters
 
-  let classes = getFilteredClasses(class_name, filters)
+  let classes = ""
+
+  if (filters.classFilters || filters.methodFilters) {
+    try {
+      classes = getFilteredClasses(class_name, filters)
+    } catch(e) {
+      console.log(chalk.blueBright("class probably isnt loaded, use "+chalk.redBright("loadClassNow()")+chalk.blueBright(" with the full class name")))
+      return
+    }
+  } else {
+    classes = getClasses(class_name)
+  }
 
   for (const klass of classes) {
     let methods = klass["methods"]
@@ -32,8 +33,10 @@ function hookAll(class_name: String, options: any){
         _hook(klass.name, method, options["callback"], options["print"])
       } catch(e) {
         console.log(chalk.red(e))
+        return
       }
     }
+    console.log(chalk.greenBright(`${klass.name} methods hooked.`))
   }
 }
 
@@ -43,25 +46,27 @@ function getFilteredClasses(class_name, filters){
 }
 
 function getClasses(class_name){
-  let _klass = Java.enumerateMethods(`*${class_name}*!*/i`)
-  let classes = _klass[0]["classes"]
+  let _klass = Java.enumerateMethods(`*${class_name}*!*/i`)[0]["classes"]
+  return _klass 
+}
 
+function applyFilters(list: Array<any>, filters: Filters){
+  let classes = list
+  if (filters.classFilters) { classes = filterClasses(classes, filters) }
+  if (filters.methodFilters) { classes = filterMethods(classes, filters) }
   return classes
 }
 
-// remove classes, remove methods
-function applyFilters(list: Array<any>, filters: Filters){
-  return _filter(list, filters)
-}
-
-function _filter(list, filters){
+function filterClasses(classes, filters){
   let class_filter = new RegExp(filters.classFilters.join("|"), 'i')
-  let method_filter = new RegExp(filters.methodFilters.join("|"), 'i')
 
-  let classes = list.filter((el) => {
+  return classes.filter((el) => {
     if (!class_filter.test(el.name)) return el
   })
+}
 
+function filterMethods(classes, filters){
+  let method_filter = new RegExp(filters.methodFilters.join("|"), 'i')
   let finalclasses = []
 
   classes.forEach(klass => {

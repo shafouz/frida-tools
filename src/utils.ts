@@ -133,7 +133,13 @@ function _hook(fqcn, function_name, fn, print="on"){
     Java.perform(function(){
       let klass = Java.use(`${fqcn}`)
       let method = function_name
-      let overloadCount = klass[method].overloads.length
+      let overloadCount = 0
+
+      try {
+        overloadCount = klass[method].overloads.length
+      } catch(e) {
+        return
+      }
 
       for (let i = 0; i < overloadCount; i++) {
         klass[method].overloads[i].implementation = function(){
