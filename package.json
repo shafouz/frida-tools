@@ -1,0 +1,33 @@
+{
+  "name": "frida_script",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.ts",
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "frida-compile index.ts -o _agent.js -c",
+    "watch": "frida-compile index.ts -o _agent.js -w"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thouger/frida_script.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/thouger/frida_script/issues"
+  },
+  "homepage": "https://github.com/thouger/frida_script#readme",
+  "dependencies": {
+    "@types/frida-gum": "^18.2.0",
+    "chalk": "^4.1.2",
+    "frida-compile": "^10.2.5",
+    "frida-java-bridge": "^6.2.3",
+    "jsfuzz": "^1.0.15",
+    "watch": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^18.8.0"
+  }
+}
