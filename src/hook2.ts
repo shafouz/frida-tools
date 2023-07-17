@@ -10,6 +10,8 @@ function hook2(
 ) {
   setTimeout(function () {
     Java.perform(function () {
+      console.log(chalk.blueBright(`trying:`), `${fqcn}.${function_name}`);
+
       let klass = Java.use(`${fqcn}`);
       let method = function_name;
       let overloadCount = 0;
@@ -28,13 +30,15 @@ function hook2(
 
           // if not found && not empty skip
           if (
-            stack_trace.indexOf(stack_trace_filter) === -1 &&
+            stack_trace
+              .toLowerCase()
+              .indexOf(stack_trace_filter.toLowerCase()) === -1 &&
             stack_trace_filter !== ""
           ) {
             return this[function_name](...arguments);
           }
 
-          global.__this = Java.retain(this);
+          // global.__this = Java.retain(this);
 
           let output = [];
 
@@ -85,28 +89,28 @@ function hook2(
   }, 0);
 }
 
-type RegexString = String;
 function hookAll2(
-  klass_name: RegexString,
-  function_name: String,
+  klass_name_fuzzy: String,
+  function_name_fuzzy: String,
   callback: Function,
   stack_trace_filter: String = "",
-  klass_filters: Array = [],
-  method_filters: Array = []
+  klass_filters: String[] = [],
+  method_filters: String[] = []
 ) {
   setTimeout(function () {
     Java.perform(function () {
-      let klasses = findLoadedClass(klass_name);
-      // console.log("DEBUGPRINT[1]: hook2.ts:100: klasses=", klasses);
+      console.log(chalk.blueBright("Starting hookAll"));
+      let klasses = findLoadedClass(klass_name_fuzzy);
 
       handleKlasses(
         klasses,
-        function_name,
+        function_name_fuzzy,
         callback,
         stack_trace_filter,
         klass_filters,
         method_filters
       );
+      console.log(chalk.blueBright("Finished hookAll"));
     });
   }, 0);
 }
@@ -116,13 +120,21 @@ function handleKlasses(
   function_name: String,
   callback: Function,
   stack_trace_filter: String = "",
-  klass_filters: Array = [],
-  method_filters: Array = []
+  klass_filters: String[] = [],
+  method_filters: String[] = []
 ) {
   for (const fqcn of klasses) {
-    if (klass_filters.some((k) => fqcn.indexOf(k) !== -1)) continue;
+    if (klass_filters.length !== 0) {
+      if (
+        klass_filters.some(
+          (k) => fqcn.toLowerCase().indexOf(k.toLowerCase()) !== -1 && k !== ""
+        )
+      )
+        continue;
+    }
 
     let methods: Array = getMethods(fqcn, function_name);
+
     if (methods.length === 0) {
       continue;
     }
@@ -134,24 +146,32 @@ function handleKlasses(
 
 function handleMethods(
   klass,
-  methods: Array,
+  methods: String[],
   callback: Function,
   stack_trace_filter: String = "",
-  method_filters: Array
+  method_filters: String[]
 ) {
   for (const method of methods) {
-    if (method_filters.some((m) => method.indexOf(m) !== -1)) continue;
+    if (method_filters.length !== 0) {
+      if (
+        method_filters.some(
+          (m) =>
+            method.toLowerCase().indexOf(m.toLowerCase()) !== -1 && m !== ""
+        )
+      )
+        continue;
+    }
 
     let overloadCount = 0;
 
     try {
       overloadCount = klass[method].overloads.length;
     } catch (e) {
-      return;
+      continue;
     }
 
     const fqcn = klass.$className;
-    console.log(`-> ${fqcn}.${method}`);
+    console.log(chalk.blueBright(`->`), `${fqcn}.${method}`);
 
     for (let i = 0; i < overloadCount; i++) {
       klass[method].overloads[i].implementation = function () {
@@ -167,7 +187,7 @@ function handleMethods(
           return this[method](...arguments);
         }
 
-        global.__this = Java.retain(this);
+        // global.__this = Java.retain(this);
 
         let output = [];
 
@@ -216,8 +236,15 @@ function handleMethods(
 }
 
 function getMethods(klass: String, function_name: String) {
+  // console.log(chalk.blueBright("klass:"), klass);
   let methods_raw = Java.enumerateMethods(`${klass}!*${function_name}*/i`);
-  // if (klass.indexOf("AjcClosure") !== -1 ) { return; }
+  // if (
+  //   klass.indexOf(
+  //     "com.iherb.mobile.prepay.checkout.expresspaypal.PaypalActivity"
+  //   ) !== -1
+  // ) {
+  //   console.log(JSON.stringify(methods_raw));
+  // }
   if (methods_raw.length > 1) {
     console.log(
       chalk.red(`Error, too many loaders. ${JSON.stringify(methods_raw)}`)

@@ -111,7 +111,7 @@ function findLoadedClass(className) {
 
   return Java.enumerateLoadedClassesSync().filter((k) =>
     filters.every((filter) => {
-      return k.indexOf(filter) !== -1;
+      return k.toLowerCase().indexOf(filter.toLowerCase()) !== -1;
     })
   );
 }
@@ -264,6 +264,7 @@ export {
   loadClassNow,
   findLoadedClass,
   printObject,
+  get_path_handler_mapping,
 };
 
 function startActivity(activity, options) {
@@ -284,5 +285,36 @@ function startActivity(activity, options) {
 
       context.startActivity(intent);
     });
+  });
+}
+
+function get_path_handler_mapping() {
+  Java.perform(() => {
+    let map = Java.use(
+      "com.iherb.mobile.commons.utils.deeplink.DeepLinkResolver"
+    )
+      .$new()
+      .access$getMap$cp();
+
+    let objs = Java.use("com.iherb.mobile.commons.utils.deeplink.DeepLinkType")
+      .values()
+      .map((e) => {
+        let t = { type: e, path: e.getPath() };
+        let entry = map.get(e);
+
+        if (entry == null || entry == undefined) {
+          return {};
+        }
+
+        return {
+          klass: entry.toString().split("@")[0],
+          path: t.path,
+        };
+      })
+      .filter((e) => e.klass != undefined && e.klass != null);
+
+    for (const { klass, path } of objs) {
+      console.log(`${chalk.blueBright(path)} -> ${klass}`);
+    }
   });
 }
