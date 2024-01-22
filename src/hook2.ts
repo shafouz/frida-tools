@@ -8,8 +8,8 @@ function hook2(
   callback: Function,
   stack_trace_filter: String = ""
 ) {
-  setTimeout(function () {
-    Java.perform(function () {
+  setTimeout(function() {
+    Java.perform(function() {
       console.log(chalk.blueBright(`trying:`), `${fqcn}.${function_name}`);
 
       let klass = Java.use(`${fqcn}`);
@@ -23,17 +23,18 @@ function hook2(
       }
 
       for (let i = 0; i < overloadCount; i++) {
-        klass[method].overloads[i].implementation = function () {
+        klass[method].overloads[i].implementation = function() {
           let stack_trace: String = Java.use(
             "android.util.Log"
           ).getStackTraceString(Java.use("java.lang.Exception").$new());
 
-          // if not found && not empty skip
+          // if the filter is not empty
+          // and what you looking at in the trace is not found 
           if (
+            stack_trace_filter !== "" &&
             stack_trace
               .toLowerCase()
-              .indexOf(stack_trace_filter.toLowerCase()) === -1 &&
-            stack_trace_filter !== ""
+              .indexOf(stack_trace_filter.toLowerCase()) === -1
           ) {
             return this[function_name](...arguments);
           }
@@ -43,7 +44,7 @@ function hook2(
           let output = [];
 
           try {
-          } catch {}
+          } catch { }
 
           var return_value = this[function_name](...arguments);
 
@@ -89,22 +90,33 @@ function hook2(
   }, 0);
 }
 
+/**
+ * Tries and hook whatever is specified by klass_name and function_name
+ * Does not uses regex, but you can glob with `*`.
+ *
+ * @param {string} klass_name - class name
+ * @param {string} function_name - function name
+ * @param {Function} callback - function to run inside the hook
+ * @param {string} stack_trace_filter - Only prints if filter is in the function stack trace, using java.lang.Exception/android.util.log
+ * @param {string[]} klass_filters - list of class names to skip hooking
+ * @param {string[]} method_filters - list of method names to skip hooking
+**/
 function hookAll2(
-  klass_name_fuzzy: String,
-  function_name_fuzzy: String,
+  klass_name: String,
+  function_name: String,
   callback: Function,
   stack_trace_filter: String = "",
   klass_filters: String[] = [],
   method_filters: String[] = []
 ) {
-  setTimeout(function () {
-    Java.perform(function () {
+  setTimeout(function() {
+    Java.perform(function() {
       console.log(chalk.blueBright("Starting hookAll"));
-      let klasses = findLoadedClass(klass_name_fuzzy);
+      let klasses = findLoadedClass(klass_name);
 
       handleKlasses(
         klasses,
-        function_name_fuzzy,
+        function_name,
         callback,
         stack_trace_filter,
         klass_filters,
@@ -174,15 +186,15 @@ function handleMethods(
     console.log(chalk.blueBright(`->`), `${fqcn}.${method}`);
 
     for (let i = 0; i < overloadCount; i++) {
-      klass[method].overloads[i].implementation = function () {
+      klass[method].overloads[i].implementation = function() {
         let stack_trace: String = Java.use(
           "android.util.Log"
         ).getStackTraceString(Java.use("java.lang.Exception").$new());
 
-        // if not found && not empty skip
+        // if the filter is not empty
+        // and what you looking at in the trace is not found 
         if (
-          stack_trace.indexOf(stack_trace_filter) === -1 &&
-          stack_trace_filter !== ""
+          stack_trace_filter !== "" && stack_trace.indexOf(stack_trace_filter) === -1
         ) {
           return this[method](...arguments);
         }
@@ -190,10 +202,6 @@ function handleMethods(
         // global.__this = Java.retain(this);
 
         let output = [];
-
-        try {
-        } catch {}
-
         var return_value = this[method](...arguments);
 
         output.push(chalk.blueBright(`\n[===] Class name [===]`));

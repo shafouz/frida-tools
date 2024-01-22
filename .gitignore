@@ -2,3 +2,5 @@
 package-lock.json
 _agent.js
 _run.ts
+__handlers__/
+frida-server*

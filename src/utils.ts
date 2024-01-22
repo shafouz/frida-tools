@@ -16,6 +16,7 @@ function dumpStackTrace() {
     .join("\n\t");
 
   console.log(chalk.magenta(exp_string));
+  return exp_string
 }
 
 function printObject(arg): string {
@@ -31,7 +32,11 @@ function searchMethod(klass, method) {
 }
 
 var _use = function _use(klass) {
-  return Java.use(klass);
+  try {
+    return Java.use(klass);
+  } catch {
+    return loadClassNow(klass);
+  }
 };
 
 function dumpJavaMap(map) {
@@ -58,7 +63,7 @@ function dumpGetMethods(arg) {
       if (temp == undefined || temp == null || temp == "") continue;
       console.log(
         chalk.blueBright(`${method.split("get")[1]}: `) +
-          chalk.whiteBright(`${printObject(temp)}`)
+        chalk.whiteBright(`${printObject(temp)}`)
       );
     } catch {
       continue;
@@ -118,6 +123,7 @@ function findLoadedClass(className) {
 
 function loadClassNow(myClass) {
   let c = "";
+  console.log("Searching:", myClass)
   Java.perform(() => {
     const classLoaders = Java.enumerateClassLoadersSync();
     for (const classLoader in classLoaders) {
@@ -125,34 +131,13 @@ function loadClassNow(myClass) {
         classLoader.findClass(myClass);
         Java.classFactory.get(loader);
         break;
-      } catch {
+      } catch (e) {
         continue;
       }
     }
     c = Java.use(myClass);
   });
   return c;
-}
-
-function hookAll(klass, options) {
-  let loadUrl = Java.enumerateMethods(`*${klass}*!*/i`);
-
-  const global_ignore = "AjcClosure";
-
-  for (const klass of loadUrl[0]["classes"]) {
-    let class_name = klass["name"];
-    if (class_name.indexOf(global_ignore) != -1) continue;
-
-    let methods = klass["methods"];
-
-    for (const method of methods) {
-      try {
-        _hook(class_name, method, options["callback"], options["print"]);
-      } catch (e) {
-        // console.log(e)
-      }
-    }
-  }
 }
 
 const use = {
@@ -167,11 +152,18 @@ const use = {
   Activity: _use("android.app.Activity"),
   Exception: _use("java.lang.Exception"),
   Map: _use("java.util.Map"),
+  ActivityThread: _use('android.app.ActivityThread')
 };
 
+// const iherb = {
+//   Paths: _use("com.iherb.mobile.base.legacy.classes.Paths"),
+//   Extra: _use("com.iherb.mobile.base.legacy.classes.Extra"),
+//   CheckoutServiceImpl: _use("com.iherb.mobile.prepay.CheckoutServiceImpl"),
+// };
+
 function _hook(fqcn, function_name, fn, print = "on") {
-  setTimeout(function () {
-    Java.perform(function () {
+  setTimeout(function() {
+    Java.perform(function() {
       let klass = Java.use(`${fqcn}`);
       let method = function_name;
       let overloadCount = 0;
@@ -183,12 +175,12 @@ function _hook(fqcn, function_name, fn, print = "on") {
       }
 
       for (let i = 0; i < overloadCount; i++) {
-        klass[method].overloads[i].implementation = function () {
+        klass[method].overloads[i].implementation = function() {
           if (print === "on") {
             global.__this = Java.retain(this);
 
             try {
-            } catch {}
+            } catch { }
 
             var return_value = this[function_name](...arguments);
 
@@ -231,7 +223,7 @@ function _hook(fqcn, function_name, fn, print = "on") {
             global.__this = Java.retain(this);
 
             try {
-            } catch {}
+            } catch { }
 
             var return_value = this[function_name](...arguments);
 
@@ -251,7 +243,13 @@ function _hook(fqcn, function_name, fn, print = "on") {
   }, 0);
 }
 
+function javaRandomInt(){
+  return Java.use("java.util.Random").$new().nextInt()
+}
+
 export {
+  javaRandomInt,
+  iherb,
   use,
   _hook,
   searchMethod,
@@ -271,7 +269,7 @@ function startActivity(activity, options) {
   if (options["method"]) utils._hook(activity, options["method"], _fn);
 
   Java.perform(() => {
-    Java.scheduleOnMainThread(function () {
+    Java.scheduleOnMainThread(function() {
       var context = Java.use("android.app.ActivityThread")
         .currentApplication()
         .getApplicationContext();
