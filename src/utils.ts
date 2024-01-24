@@ -1,19 +1,15 @@
 //@ts-nocheck
 import chalk from "chalk";
+import { hookAll2 } from "./hook2";
+
+function get_called_methods(){
+  return Array.from(new Set(global.hook2.flatMap(e => { return e['fqcn'] + ' ! ' + e['method'] })))
+}
 
 function dumpStackTrace() {
   let exp_string = Java.use("android.util.Log").getStackTraceString(
     Java.use("java.lang.Exception").$new()
   );
-  exp_string = exp_string
-    .split("\n\t")
-    .filter(
-      (e) =>
-        e.indexOf(".aop.") == -1 &&
-        e.indexOf("aspectj") == -1 &&
-        e.indexOf("AjcClosure") == -1
-    )
-    .join("\n\t");
 
   console.log(chalk.magenta(exp_string));
   return exp_string
@@ -111,14 +107,41 @@ function benchmark(fn) {
   console.log(`Elapsed time: ${elapsedTime} milliseconds`);
 }
 
-function findLoadedClass(className) {
-  let filters = className.split("*");
+function logActivities(){
+  hookAll2("android.app.Instrumentation", "newActivity", (_this, args, ret) => {
+    console.log("DEBUGPRINT[3]: utils.ts:112: _this=", _this)
+    let intent = Array.from(args)[2]
+    console.log(`=> ${ret.$className}\n  => ${intent.toString()}\n  => ${intent.getExtras().toString()}`)
+  })
+}
 
-  return Java.enumerateLoadedClassesSync().filter((k) =>
-    filters.every((filter) => {
-      return k.toLowerCase().indexOf(filter.toLowerCase()) !== -1;
-    })
-  );
+function logFragmentParams(){
+  hookAll2("androidx.fragment.app.FragmentTransaction", "add", (_this, args, ret) => {
+    try {
+      console.log(`=> ${args[1].$className}\n  => ${args[1].getArguments().toString()}`)
+    } catch {
+    }
+  })
+}
+
+/**
+  Searches for a class name using the frida's enumerateLoadedClassesSync.
+  Will fuzzy search if a star is in className otherwise it needs an exact match
+
+  @param {string} className - Can be fuzzy searched with '\*'
+**/
+function findLoadedClass(className) {
+  if (className.indexOf("*") !== -1) {
+    let filters = className.split("*");
+
+    return Java.enumerateLoadedClassesSync().filter((k) =>
+      filters.every((filter) => {
+        return k.toLowerCase().indexOf(filter.toLowerCase()) !== -1;
+      })
+    );
+  }
+
+  return Java.enumerateLoadedClassesSync().filter((k) => k == className)
 }
 
 function loadClassNow(myClass) {
@@ -147,6 +170,7 @@ const use = {
   Uri: _use("android.net.Uri"),
   Object: _use("java.lang.Object"),
   String: _use("java.lang.String"),
+  ArrayList: _use("java.util.ArrayList"),
   Context: _use("android.content.Context"),
   Bundle: _use("android.os.Bundle"),
   Activity: _use("android.app.Activity"),
@@ -247,24 +271,6 @@ function javaRandomInt(){
   return Java.use("java.util.Random").$new().nextInt()
 }
 
-export {
-  javaRandomInt,
-  iherb,
-  use,
-  _hook,
-  searchMethod,
-  dumpJavaMap,
-  dumpIntent,
-  dumpGetMethods,
-  hookAll,
-  dumpStackTrace,
-  objKeys,
-  loadClassNow,
-  findLoadedClass,
-  printObject,
-  get_path_handler_mapping,
-};
-
 function startActivity(activity, options) {
   if (options["method"]) utils._hook(activity, options["method"], _fn);
 
@@ -316,3 +322,24 @@ function get_path_handler_mapping() {
     }
   });
 }
+
+export {
+  javaRandomInt,
+  iherb,
+  use,
+  _hook,
+  searchMethod,
+  dumpJavaMap,
+  dumpIntent,
+  dumpGetMethods,
+  hookAll,
+  dumpStackTrace,
+  objKeys,
+  loadClassNow,
+  findLoadedClass,
+  printObject,
+  get_path_handler_mapping,
+  get_called_methods,
+  logFragmentParams,
+  logActivities
+};

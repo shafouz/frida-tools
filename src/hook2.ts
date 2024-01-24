@@ -2,94 +2,6 @@
 import chalk from "chalk";
 import { findLoadedClass, printObject } from "./utils";
 
-function hook2(
-  fqcn: String,
-  function_name: String,
-  callback: Function,
-  stack_trace_filter: String = ""
-) {
-  setTimeout(function() {
-    Java.perform(function() {
-      console.log(chalk.blueBright(`trying:`), `${fqcn}.${function_name}`);
-
-      let klass = Java.use(`${fqcn}`);
-      let method = function_name;
-      let overloadCount = 0;
-
-      try {
-        overloadCount = klass[method].overloads.length;
-      } catch (e) {
-        return;
-      }
-
-      for (let i = 0; i < overloadCount; i++) {
-        klass[method].overloads[i].implementation = function() {
-          let stack_trace: String = Java.use(
-            "android.util.Log"
-          ).getStackTraceString(Java.use("java.lang.Exception").$new());
-
-          // if the filter is not empty
-          // and what you looking at in the trace is not found 
-          if (
-            stack_trace_filter !== "" &&
-            stack_trace
-              .toLowerCase()
-              .indexOf(stack_trace_filter.toLowerCase()) === -1
-          ) {
-            return this[function_name](...arguments);
-          }
-
-          // global.__this = Java.retain(this);
-
-          let output = [];
-
-          try {
-          } catch { }
-
-          var return_value = this[function_name](...arguments);
-
-          output.push(chalk.blueBright(`\n[===] Class name [===]`));
-          output.push(chalk.whiteBright(`${fqcn}`));
-          output.push(chalk.blueBright(`[===] Method name [===]`));
-          output.push(chalk.whiteBright(`${function_name}`));
-          output.push(chalk.blueBright(`[===] this [===]`));
-          output.push(chalk.whiteBright(`${this}`));
-          output.push(chalk.blueBright("[===] function [===]"));
-
-          try {
-            output.push(
-              chalk.whiteBright(callback(this, arguments, return_value))
-            );
-          } catch (e) {
-            output.push(chalk.red(e));
-          }
-
-          output.push(chalk.yellowBright("\n[===] args [===]"));
-          let k = 1;
-          for (const arg of arguments) {
-            output.push(chalk.yellowBright(`[+] arg${k}: ${printObject(arg)}`));
-            k++;
-          }
-
-          output.push(
-            chalk.magentaBright(
-              `\nreturn_value:  ${printObject(return_value)}\n`
-            )
-          );
-          output.push(
-            chalk.grey(
-              "--------------------------------------------------------\n"
-            )
-          );
-
-          console.log(output.join("\n"));
-          return return_value;
-        };
-      }
-    });
-  }, 0);
-}
-
 /**
  * Tries and hook whatever is specified by klass_name and function_name
  * Does not uses regex, but you can glob with `*`.
@@ -163,6 +75,10 @@ function handleMethods(
   stack_trace_filter: String = "",
   method_filters: String[]
 ) {
+  global.hook2 = []
+  const fqcn = klass.$className;
+  let overloadCount = 0;
+
   for (const method of methods) {
     if (method_filters.length !== 0) {
       if (
@@ -174,19 +90,25 @@ function handleMethods(
         continue;
     }
 
-    let overloadCount = 0;
-
     try {
       overloadCount = klass[method].overloads.length;
     } catch (e) {
       continue;
     }
 
-    const fqcn = klass.$className;
     console.log(chalk.blueBright(`->`), `${fqcn}.${method}`);
-
     for (let i = 0; i < overloadCount; i++) {
       klass[method].overloads[i].implementation = function() {
+        let locals = {
+          fqcn: fqcn,
+          method: method,
+          this: null,
+          return_value: null,
+          args: [],
+          err: []
+        }
+        let output = []
+
         let stack_trace: String = Java.use(
           "android.util.Log"
         ).getStackTraceString(Java.use("java.lang.Exception").$new());
@@ -199,10 +121,7 @@ function handleMethods(
           return this[method](...arguments);
         }
 
-        // global.__this = Java.retain(this);
-
-        let output = [];
-        var return_value = this[method](...arguments);
+        let return_value = this[method](...arguments);
 
         output.push(chalk.blueBright(`\n[===] Class name [===]`));
         output.push(chalk.whiteBright(`${fqcn}`));
@@ -218,6 +137,7 @@ function handleMethods(
           );
         } catch (e) {
           output.push(chalk.red(e));
+          locals.err = e
         }
 
         output.push(chalk.yellowBright("\n[===] args [===]"));
@@ -236,7 +156,36 @@ function handleMethods(
           )
         );
 
-        console.log(output.join("\n"));
+        // console.log(output.join("\n"));
+
+        for (const k of ['this', 'return_value', 'arguments']) {
+          if (k == 'arguments') {
+            for (const [i, arg] of Array.from(arguments).entries()) {
+              try {
+                locals.args.push(Java.retain(arg))
+              } catch (e) {
+                if (e.message.indexOf("not a function") != -1) {
+                  locals.args.push(arg)
+                } else {
+                  locals.err.push(`${e}, \`arg: ${i}\``)
+                }
+              }
+            }
+            continue
+          }
+
+          try {
+            locals[k] = Java.retain(eval(k))
+          } catch (e) {
+            if (e.message.indexOf("not a function") != -1) {
+              locals[k] = eval(k)
+            } else {
+              locals.err.push(`${e}, \`${i}\``)
+            }
+          }
+        }
+
+        global.hook2.push(locals)
         return return_value;
       };
     }
@@ -245,7 +194,7 @@ function handleMethods(
 
 function getMethods(klass: String, function_name: String) {
   // console.log(chalk.blueBright("klass:"), klass);
-  let methods_raw = Java.enumerateMethods(`${klass}!*${function_name}*/i`);
+  let methods_raw = Java.enumerateMethods(`${klass}!${function_name}/i`);
   // if (
   //   klass.indexOf(
   //     "com.iherb.mobile.prepay.checkout.expresspaypal.PaypalActivity"
@@ -280,4 +229,4 @@ function getMethods(klass: String, function_name: String) {
   }
 }
 
-export { hook2, hookAll2 };
+export { hookAll2 };
