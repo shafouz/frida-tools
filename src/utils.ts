@@ -15,7 +15,7 @@ function dumpStackTrace() {
   return exp_string
 }
 
-function printObject(arg): string {
+function formatObjectObject(arg): string {
   if (arg !== undefined && arg !== null) {
     return arg.toString() == "[object Object]"
       ? JSON.stringify(arg)
@@ -59,7 +59,7 @@ function dumpGetMethods(arg) {
       if (temp == undefined || temp == null || temp == "") continue;
       console.log(
         chalk.blueBright(`${method.split("get")[1]}: `) +
-        chalk.whiteBright(`${printObject(temp)}`)
+        chalk.whiteBright(`${formatObjectObject(temp)}`)
       );
     } catch {
       continue;
@@ -125,7 +125,7 @@ function logFragmentParams(){
 }
 
 /**
-  Searches for a class name using the frida's enumerateLoadedClassesSync.
+  Searches for a class name using frida's enumerateLoadedClassesSync.
   Will fuzzy search if a star is in className otherwise it needs an exact match
 
   @param {string} className - Can be fuzzy searched with '\*'
@@ -226,14 +226,14 @@ function _hook(fqcn, function_name, fn, print = "on") {
             let k = 1;
             for (const arg of arguments) {
               console.log(
-                chalk.yellowBright(`[+] arg${k}: ${printObject(arg)}`)
+                chalk.yellowBright(`[+] arg${k}: ${formatObjectObject(arg)}`)
               );
               k++;
             }
 
             console.log(
               chalk.magentaBright(
-                `\nreturn_value:  ${printObject(return_value)}\n`
+                `\nreturn_value:  ${formatObjectObject(return_value)}\n`
               )
             );
             console.log(
@@ -337,7 +337,7 @@ export {
   objKeys,
   loadClassNow,
   findLoadedClass,
-  printObject,
+  formatObjectObject,
   get_path_handler_mapping,
   get_called_methods,
   logFragmentParams,

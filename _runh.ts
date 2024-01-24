@@ -2,28 +2,11 @@
 // import chalk from "chalk";
 import "frida-java-bridge";
 import * as utils from "./src/utils";
-import { hookAll2 } from "./src/hook2";
+import { defaults, hookAll2, HookOptions } from "./src/hook2";
 
-let filters = {
-  classFilters: [
-  ],
-  methodFilters: [
-  ],
+let fn = () => {
+
 };
-
-let options = {
-  filters: filters,
-  callback: (_this, args, ret) => {
-    // console.log("got here");
-    // utils.dumpStackTrace()
-    // for (const arg in args) {
-    //   global[`__args${arg}`] = Java.retain(args[arg]);
-    // }
-  },
-  print: "off",
-};
-
-let fn = options["callback"];
 
 function run() {
   // hookAll2("com.huawei.smartpvms.view.MainActivity", "$init", fn, "", [], [])
@@ -31,9 +14,13 @@ function run() {
   // hookAll2("*myinfofragment*", "$init", fn)
   // hookAll2("android.app.BackStackRecord", "*", fn)
   // hookAll2("androidx.fragment.app.FragmentManager", "*", fn)
-  // hookAll2("androidx.fragment.app.FragmentTransaction", "add", fn)
-  utils.logFragmentParams()
-  utils.logActivities()
+  let options:  HookOptions = {
+    ...defaults,
+    print: false
+  }
+  hookAll2("androidx.fragment.app.FragmentTransaction", "add", options)
+  // utils.logFragmentParams()
+  // utils.logActivities()
 }
 
 //@ts-expect-error

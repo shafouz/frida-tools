@@ -1,6 +1,22 @@
 //@ts-nocheck
 import chalk from "chalk";
-import { findLoadedClass, printObject } from "./utils";
+import { findLoadedClass, formatObjectObject } from "./utils";
+
+const defaults = {
+  callback: ()=>{},
+  stack_trace_filter: "",
+  klass_filters: [],
+  method_filters: [],
+  print: true
+}
+
+type HookOptions = {
+  callback: Function;
+  stack_trace_filter: string;
+  klass_filters: string[];
+  method_filters: string[];
+  print: boolean;
+};
 
 /**
  * Tries and hook whatever is specified by klass_name and function_name
@@ -8,81 +24,56 @@ import { findLoadedClass, printObject } from "./utils";
  *
  * @param {string} klass_name - class name
  * @param {string} function_name - function name
- * @param {Function} callback - function to run inside the hook
- * @param {string} stack_trace_filter - Only prints if filter is in the function stack trace, using java.lang.Exception/android.util.log
- * @param {string[]} klass_filters - list of class names to skip hooking
- * @param {string[]} method_filters - list of method names to skip hooking
+ * @param {HookOptions} options - possible options for hooks
 **/
 function hookAll2(
-  klass_name: String,
-  function_name: String,
-  callback: Function,
-  stack_trace_filter: String = "",
-  klass_filters: String[] = [],
-  method_filters: String[] = []
+  klass_name: string,
+  function_name: string,
+  options: HookOptions
 ) {
   setTimeout(function() {
     Java.perform(function() {
       console.log(chalk.blueBright("Starting hookAll"));
+
       let klasses = findLoadedClass(klass_name);
 
-      handleKlasses(
-        klasses,
-        function_name,
-        callback,
-        stack_trace_filter,
-        klass_filters,
-        method_filters
-      );
+      for (const fqcn of klasses) {
+        if (options.klass_filters.length !== 0) {
+          if (
+            options.klass_filters.some(
+              (k) => fqcn.toLowerCase().indexOf(k.toLowerCase()) !== -1 && k !== ""
+            )
+          )
+            continue;
+        }
+
+        let methods: Array = getMethods(fqcn, function_name);
+        if (methods.length === 0) {
+          continue;
+        }
+
+        let klass = Java.use(fqcn);
+        handleMethods(klass, methods, options);
+      }
+
       console.log(chalk.blueBright("Finished hookAll"));
     });
   }, 0);
 }
 
-function handleKlasses(
-  klasses: Array,
-  function_name: String,
-  callback: Function,
-  stack_trace_filter: String = "",
-  klass_filters: String[] = [],
-  method_filters: String[] = []
-) {
-  for (const fqcn of klasses) {
-    if (klass_filters.length !== 0) {
-      if (
-        klass_filters.some(
-          (k) => fqcn.toLowerCase().indexOf(k.toLowerCase()) !== -1 && k !== ""
-        )
-      )
-        continue;
-    }
-
-    let methods: Array = getMethods(fqcn, function_name);
-
-    if (methods.length === 0) {
-      continue;
-    }
-
-    let klass = Java.use(fqcn);
-    handleMethods(klass, methods, callback, stack_trace_filter, method_filters);
-  }
-}
-
 function handleMethods(
-  klass,
-  methods: String[],
-  callback: Function,
-  stack_trace_filter: String = "",
-  method_filters: String[]
+  klass: string,
+  methods: string[],
+  options: HookOptions
 ) {
   global.hook2 = []
   const fqcn = klass.$className;
   let overloadCount = 0;
 
   for (const method of methods) {
-    if (method_filters.length !== 0) {
+    if (options.method_filters.length !== 0) {
       if (
-        method_filters.some(
+        options.method_filters.some(
           (m) =>
             method.toLowerCase().indexOf(m.toLowerCase()) !== -1 && m !== ""
         )
@@ -116,7 +107,7 @@ function handleMethods(
         // if the filter is not empty
         // and what you looking at in the trace is not found 
         if (
-          stack_trace_filter !== "" && stack_trace.indexOf(stack_trace_filter) === -1
+          options.stack_trace_filter !== "" && stack_trace.indexOf(options.stack_trace_filter) === -1
         ) {
           return this[method](...arguments);
         }
@@ -133,7 +124,7 @@ function handleMethods(
 
         try {
           output.push(
-            chalk.whiteBright(callback(this, arguments, return_value))
+            chalk.whiteBright(options.callback(this, arguments, return_value))
           );
         } catch (e) {
           output.push(chalk.red(e));
@@ -143,12 +134,12 @@ function handleMethods(
         output.push(chalk.yellowBright("\n[===] args [===]"));
         let k = 1;
         for (const arg of arguments) {
-          output.push(chalk.yellowBright(`[+] arg${k}: ${printObject(arg)}`));
+          output.push(chalk.yellowBright(`[+] arg${k}: ${formatObjectObject(arg)}`));
           k++;
         }
 
         output.push(
-          chalk.magentaBright(`\nreturn_value:  ${printObject(return_value)}\n`)
+          chalk.magentaBright(`\nreturn_value:  ${formatObjectObject(return_value)}\n`)
         );
         output.push(
           chalk.grey(
@@ -156,7 +147,9 @@ function handleMethods(
           )
         );
 
-        // console.log(output.join("\n"));
+        if (options.print) {
+          console.log(output.join("\n"));
+        }
 
         for (const k of ['this', 'return_value', 'arguments']) {
           if (k == 'arguments') {
@@ -193,15 +186,7 @@ function handleMethods(
 }
 
 function getMethods(klass: String, function_name: String) {
-  // console.log(chalk.blueBright("klass:"), klass);
   let methods_raw = Java.enumerateMethods(`${klass}!${function_name}/i`);
-  // if (
-  //   klass.indexOf(
-  //     "com.iherb.mobile.prepay.checkout.expresspaypal.PaypalActivity"
-  //   ) !== -1
-  // ) {
-  //   console.log(JSON.stringify(methods_raw));
-  // }
   if (methods_raw.length > 1) {
     console.log(
       chalk.red(`Error, too many loaders. ${JSON.stringify(methods_raw)}`)
@@ -210,11 +195,6 @@ function getMethods(klass: String, function_name: String) {
   } else if (methods_raw.length === 0) {
     return [];
   }
-
-  // console.log(
-  //   "DEBUGPRINT[5]: hook2.ts:153: methods_raw=",
-  //   JSON.stringify(methods_raw)
-  // );
 
   for (const loader of methods_raw) {
     if (loader["classes"].length > 1) {
@@ -229,4 +209,4 @@ function getMethods(klass: String, function_name: String) {
   }
 }
 
-export { hookAll2 };
+export { hookAll2, HookOptions, defaults };
