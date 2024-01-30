@@ -145,8 +145,7 @@ function findLoadedClass(className) {
 }
 
 function loadClassNow(myClass) {
-  let c = "";
-  console.log("Searching:", myClass)
+  let c;
   Java.perform(() => {
     const classLoaders = Java.enumerateClassLoadersSync();
     for (const classLoader in classLoaders) {
@@ -160,7 +159,12 @@ function loadClassNow(myClass) {
     }
     c = Java.use(myClass);
   });
-  return c;
+
+  if (c !== null && c != undefined) {
+    console.log(`Loaded \`${c}\``)
+  } else {
+    console.log(`Could not load \`${myClass}\``)
+  }
 }
 
 const use = {
